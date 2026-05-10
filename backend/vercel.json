@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "name": "backend-api",
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "server.js",
+      "dest": "/api"
+    }
+  ],
+  "env": {
+    "MONGODB_URI": "mongodb://127.0.0.1:27017/ustadgo",
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "api/server.js": {
+      "runtime": "nodejs18.x"
+    }
+  }
+}
