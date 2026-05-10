@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect("mongodb://127.0.0.1:27017/ustadgo")
+mongoose.connect("mongodb+srv://ustadgo:ustad123@cluster0.dovgvm2.mongodb.net/ustadgo?retryWrites=true&w=majority")
   .then(() => console.log("MongoDB Connected ✅"))
   .catch(err => console.log(err));
 
