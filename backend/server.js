@@ -3,7 +3,6 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
-require("dotenv").config();
 
 const JobRequest = require("./models/Job_Requests.js");
 
@@ -14,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect("mongodb+srv://ustadgo:ustad123@cluster0.dovgvm2.mongodb.net/ustadgo?retryWrites=true&w=majority")
   .then(() => console.log("MongoDB Connected ✅"))
   .catch(err => console.log(err));
 

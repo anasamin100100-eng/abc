@@ -3,9 +3,8 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-require("dotenv").config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "ustadgo-super-secret-key-2024"; // later move to .env
+const SECRET = "ustadgo-secret"; // later move to .env
 
 // REGISTER
 router.post("/register", async (req, res) => {
@@ -39,7 +38,7 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      JWT_SECRET,
+      SECRET,
       { expiresIn: "1d" }
     );
 
