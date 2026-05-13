@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
-const SECRET = "ustadgo-secret";
+const JWT_SECRET = process.env.JWT_SECRET || "ustadgo-super-secret-key-2024";
 
 module.exports = (req, res, next) => {
   const token = req.headers.authorization;
@@ -8,7 +9,7 @@ module.exports = (req, res, next) => {
   if (!token) return res.status(401).json({ msg: "No token" });
 
   try {
-    const decoded = jwt.verify(token, SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch {
