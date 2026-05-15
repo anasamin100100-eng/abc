@@ -91,7 +91,8 @@ function ActiveJobsPage() {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const loadJobs = () => {
-    fetch("https://ustadgo.vercel.app/api/jobs?limit=10")
+    fetch("http://localhost:5000/api/jobs?limit=10")
+    //fetch("https://ustadgo.vercel.app/api/jobs?limit=10")
       .then((res) => res.json())
       .then((data: BackendJob[]) => {
         const formatted = data.slice(0, totalBackendJobs).map((job) => ({
