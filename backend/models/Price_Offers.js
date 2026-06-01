@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const priceOfferSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   job_id: { type: mongoose.Schema.Types.ObjectId, ref: "JobRequest" },
   worker_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   offered_price: Number,
@@ -12,6 +13,6 @@ const priceOfferSchema = new mongoose.Schema({
   },
   offered_at: Date,
   responded_at: Date,
-}, { timestamps: true });
+});
 
-module.exports = mongoose.model("PriceOffer", priceOfferSchema);
+module.exports = mongoose.model("PriceOffer", priceOfferSchema, "price_offers");

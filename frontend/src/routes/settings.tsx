@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Settings as SettingsIcon,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
+import { apiFetch } from "@/utils/api";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -25,17 +26,43 @@ export const Route = createFileRoute("/settings")({
   }),
 });
 
-const admins = [
-  { name: "Ahmed Khan", role: "SUPER ADMIN", status: "ACTIVE", statusClass: "bg-surface-muted text-foreground/70" },
-  { name: "Zoya Malik", role: "MODERATOR", status: "ACTIVE", statusClass: "bg-emerald-100 text-emerald-700" },
-  { name: "Usman Ali", role: "MODERATOR", status: "OFFLINE", statusClass: "bg-surface-muted text-muted-foreground" },
-];
+type AdminAccount = {
+  name: string;
+  role: string;
+  status: string;
+  statusClass: string;
+};
 
 function SettingsPage() {
   const [maintenance, setMaintenance] = useState(false);
   const [aiVerify, setAiVerify] = useState(true);
   const [twoFactor, setTwoFactor] = useState(true);
   const [cnicHours, setCnicHours] = useState(12);
+  const [admins, setAdmins] = useState<AdminAccount[]>([]);
+
+  useEffect(() => {
+    async function loadAdmins() {
+      try {
+        const response = await apiFetch("/users");
+        if (!response.ok) return;
+        const users = (await response.json()) as Array<{ name?: string; role?: string }>;
+        setAdmins(
+          users
+            .filter((user) => user.role === "admin")
+            .map((user) => ({
+              name: user.name || "Admin User",
+              role: "SUPER ADMIN",
+              status: "ACTIVE",
+              statusClass: "bg-emerald-100 text-emerald-700",
+            })),
+        );
+      } catch {
+        setAdmins([]);
+      }
+    }
+
+    loadAdmins();
+  }, []);
 
   return (
     <div className="min-h-screen bg-surface-muted flex">

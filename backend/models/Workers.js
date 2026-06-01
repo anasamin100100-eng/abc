@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const workerSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   service_id: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
   cnic: String,
@@ -28,6 +29,6 @@ const workerSchema = new mongoose.Schema({
     min: 0,
     default: 0,
   },
-}, { timestamps: true });
+});
 
-module.exports = mongoose.model("Worker", workerSchema);
+module.exports = mongoose.model("Worker", workerSchema, "workers");

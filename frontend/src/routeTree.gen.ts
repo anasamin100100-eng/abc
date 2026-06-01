@@ -10,19 +10,36 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkersRouteImport } from './routes/workers'
+import { Route as WithdrawalsRouteImport } from './routes/withdrawals'
+import { Route as UsersRouteImport } from './routes/users'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as ReviewsRouteImport } from './routes/reviews'
+import { Route as PrebookingsRouteImport } from './routes/prebookings'
+import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as JobRequestsRouteImport } from './routes/job-requests'
+import { Route as EarningsRouteImport } from './routes/earnings'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as AllJobsRouteImport } from './routes/all-jobs'
 import { Route as ActiveJobsRouteImport } from './routes/active-jobs'
 import { Route as IndexRouteImport } from './routes/index'
 
 const WorkersRoute = WorkersRouteImport.update({
   id: '/workers',
   path: '/workers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WithdrawalsRoute = WithdrawalsRouteImport.update({
+  id: '/withdrawals',
+  path: '/withdrawals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsersRoute = UsersRouteImport.update({
+  id: '/users',
+  path: '/users',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -40,9 +57,29 @@ const ReviewsRoute = ReviewsRouteImport.update({
   path: '/reviews',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrebookingsRoute = PrebookingsRouteImport.update({
+  id: '/prebookings',
+  path: '/prebookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentsRoute = PaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JobRequestsRoute = JobRequestsRouteImport.update({
+  id: '/job-requests',
+  path: '/job-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EarningsRoute = EarningsRouteImport.update({
+  id: '/earnings',
+  path: '/earnings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -60,6 +97,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AllJobsRoute = AllJobsRouteImport.update({
+  id: '/all-jobs',
+  path: '/all-jobs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ActiveJobsRoute = ActiveJobsRouteImport.update({
   id: '/active-jobs',
   path: '/active-jobs',
@@ -74,38 +116,59 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/active-jobs': typeof ActiveJobsRoute
+  '/all-jobs': typeof AllJobsRoute
   '/analytics': typeof AnalyticsRoute
   '/clients': typeof ClientsRoute
   '/dashboard': typeof DashboardRoute
+  '/earnings': typeof EarningsRoute
+  '/job-requests': typeof JobRequestsRoute
   '/login': typeof LoginRoute
+  '/payments': typeof PaymentsRoute
+  '/prebookings': typeof PrebookingsRoute
   '/reviews': typeof ReviewsRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
+  '/users': typeof UsersRoute
+  '/withdrawals': typeof WithdrawalsRoute
   '/workers': typeof WorkersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/active-jobs': typeof ActiveJobsRoute
+  '/all-jobs': typeof AllJobsRoute
   '/analytics': typeof AnalyticsRoute
   '/clients': typeof ClientsRoute
   '/dashboard': typeof DashboardRoute
+  '/earnings': typeof EarningsRoute
+  '/job-requests': typeof JobRequestsRoute
   '/login': typeof LoginRoute
+  '/payments': typeof PaymentsRoute
+  '/prebookings': typeof PrebookingsRoute
   '/reviews': typeof ReviewsRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
+  '/users': typeof UsersRoute
+  '/withdrawals': typeof WithdrawalsRoute
   '/workers': typeof WorkersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/active-jobs': typeof ActiveJobsRoute
+  '/all-jobs': typeof AllJobsRoute
   '/analytics': typeof AnalyticsRoute
   '/clients': typeof ClientsRoute
   '/dashboard': typeof DashboardRoute
+  '/earnings': typeof EarningsRoute
+  '/job-requests': typeof JobRequestsRoute
   '/login': typeof LoginRoute
+  '/payments': typeof PaymentsRoute
+  '/prebookings': typeof PrebookingsRoute
   '/reviews': typeof ReviewsRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
+  '/users': typeof UsersRoute
+  '/withdrawals': typeof WithdrawalsRoute
   '/workers': typeof WorkersRoute
 }
 export interface FileRouteTypes {
@@ -113,50 +176,78 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/active-jobs'
+    | '/all-jobs'
     | '/analytics'
     | '/clients'
     | '/dashboard'
+    | '/earnings'
+    | '/job-requests'
     | '/login'
+    | '/payments'
+    | '/prebookings'
     | '/reviews'
     | '/services'
     | '/settings'
+    | '/users'
+    | '/withdrawals'
     | '/workers'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/active-jobs'
+    | '/all-jobs'
     | '/analytics'
     | '/clients'
     | '/dashboard'
+    | '/earnings'
+    | '/job-requests'
     | '/login'
+    | '/payments'
+    | '/prebookings'
     | '/reviews'
     | '/services'
     | '/settings'
+    | '/users'
+    | '/withdrawals'
     | '/workers'
   id:
     | '__root__'
     | '/'
     | '/active-jobs'
+    | '/all-jobs'
     | '/analytics'
     | '/clients'
     | '/dashboard'
+    | '/earnings'
+    | '/job-requests'
     | '/login'
+    | '/payments'
+    | '/prebookings'
     | '/reviews'
     | '/services'
     | '/settings'
+    | '/users'
+    | '/withdrawals'
     | '/workers'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActiveJobsRoute: typeof ActiveJobsRoute
+  AllJobsRoute: typeof AllJobsRoute
   AnalyticsRoute: typeof AnalyticsRoute
   ClientsRoute: typeof ClientsRoute
   DashboardRoute: typeof DashboardRoute
+  EarningsRoute: typeof EarningsRoute
+  JobRequestsRoute: typeof JobRequestsRoute
   LoginRoute: typeof LoginRoute
+  PaymentsRoute: typeof PaymentsRoute
+  PrebookingsRoute: typeof PrebookingsRoute
   ReviewsRoute: typeof ReviewsRoute
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRoute
+  UsersRoute: typeof UsersRoute
+  WithdrawalsRoute: typeof WithdrawalsRoute
   WorkersRoute: typeof WorkersRoute
 }
 
@@ -167,6 +258,20 @@ declare module '@tanstack/react-router' {
       path: '/workers'
       fullPath: '/workers'
       preLoaderRoute: typeof WorkersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/withdrawals': {
+      id: '/withdrawals'
+      path: '/withdrawals'
+      fullPath: '/withdrawals'
+      preLoaderRoute: typeof WithdrawalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/users': {
+      id: '/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof UsersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -190,11 +295,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prebookings': {
+      id: '/prebookings'
+      path: '/prebookings'
+      fullPath: '/prebookings'
+      preLoaderRoute: typeof PrebookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payments': {
+      id: '/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof PaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/job-requests': {
+      id: '/job-requests'
+      path: '/job-requests'
+      fullPath: '/job-requests'
+      preLoaderRoute: typeof JobRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/earnings': {
+      id: '/earnings'
+      path: '/earnings'
+      fullPath: '/earnings'
+      preLoaderRoute: typeof EarningsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -218,6 +351,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/all-jobs': {
+      id: '/all-jobs'
+      path: '/all-jobs'
+      fullPath: '/all-jobs'
+      preLoaderRoute: typeof AllJobsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/active-jobs': {
       id: '/active-jobs'
       path: '/active-jobs'
@@ -238,13 +378,20 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActiveJobsRoute: ActiveJobsRoute,
+  AllJobsRoute: AllJobsRoute,
   AnalyticsRoute: AnalyticsRoute,
   ClientsRoute: ClientsRoute,
   DashboardRoute: DashboardRoute,
+  EarningsRoute: EarningsRoute,
+  JobRequestsRoute: JobRequestsRoute,
   LoginRoute: LoginRoute,
+  PaymentsRoute: PaymentsRoute,
+  PrebookingsRoute: PrebookingsRoute,
   ReviewsRoute: ReviewsRoute,
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRoute,
+  UsersRoute: UsersRoute,
+  WithdrawalsRoute: WithdrawalsRoute,
   WorkersRoute: WorkersRoute,
 }
 export const routeTree = rootRouteImport

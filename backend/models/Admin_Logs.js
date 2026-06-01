@@ -1,13 +1,14 @@
 const mongoose = require("mongoose");
 
 const adminLogSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   admin_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   action: {
     type: String,
     required: true,
   },
   target_id: {
-    type: String,
+    type: Number,
     required: true,
   },
   target_table: {
@@ -20,4 +21,4 @@ const adminLogSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model("AdminLog", adminLogSchema);
+module.exports = mongoose.model("AdminLog", adminLogSchema, "admin_logs");

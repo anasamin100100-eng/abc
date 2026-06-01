@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const paymentSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   job_id: { type: mongoose.Schema.Types.ObjectId, ref: "JobRequest" },
   offer_id: { type: mongoose.Schema.Types.ObjectId, ref: "PriceOffer" },
   client_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -17,6 +18,6 @@ const paymentSchema = new mongoose.Schema({
     default: "cash",
   },
   paid_at: Date,
-}, { timestamps: true });
+});
 
-module.exports = mongoose.model("Payment", paymentSchema);
+module.exports = mongoose.model("Payment", paymentSchema, "payments");

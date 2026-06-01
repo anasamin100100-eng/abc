@@ -19,6 +19,7 @@ import {
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { apiFetch } from "@/utils/api";
 
 export const Route = createFileRoute("/active-jobs")({
   component: ActiveJobsPage,
@@ -34,7 +35,14 @@ export const Route = createFileRoute("/active-jobs")({
   }),
 });
 
-type JobStatus = "WORKER ON WAY" | "IN PROGRESS" | "assigned" | "in_progress" | "pending" | "completed" | "cancelled";
+type JobStatus =
+  | "WORKER ON WAY"
+  | "IN PROGRESS"
+  | "assigned"
+  | "in_progress"
+  | "pending"
+  | "completed"
+  | "cancelled";
 type StatusFilter = "All Statuses" | JobStatus;
 
 interface Job {
@@ -51,17 +59,32 @@ interface Job {
 }
 
 type BackendJob = {
+  _id: string;
   id?: string;
-  service?: string;
-  area?: string;
-  worker?: string;
-  initials?: string;
-  lat?: string;
-  lng?: string;
-  latitude?: string;
-  longitude?: string;
-  eta?: string;
-  status?: JobStatus;
+  worker_id?: string;
+  service_id?: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  status?: "pending" | "assigned" | "in_progress" | "completed" | "cancelled";
+};
+
+type BackendUser = {
+  _id: string;
+  name?: string;
+};
+
+type BackendService = {
+  _id: string;
+  name?: string;
+};
+
+type EtaPrediction = {
+  eta_label?: string;
+  origin?: {
+    latitude?: number;
+    longitude?: number;
+  };
 };
 
 const pageSize = 3;
@@ -91,22 +114,71 @@ function ActiveJobsPage() {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const loadJobs = () => {
-    fetch("http://localhost:5000/api/jobs?limit=10")
-    //fetch("https://ustadgo.vercel.app/api/jobs?limit=10")
-      .then((res) => res.json())
-      .then((data: BackendJob[]) => {
-        const formatted = data.slice(0, totalBackendJobs).map((job) => ({
-          id: job.id ?? "",
-          service: job.service ?? "Service",
-          icon: getJobIcon(job.service ?? ""),
-          area: job.area ?? "Karachi",
-          worker: job.worker ?? "Unassigned",
-          initials: job.initials ?? "NA",
-          lat: job.latitude ?? job.lat ?? String(karachiCenter.lat),
-          lng: job.longitude ?? job.lng ?? String(karachiCenter.lng),
-          eta: job.eta ?? "Pending",
-          status: job.status === "assigned" ? "WORKER ON WAY" : job.status === "in_progress" ? "IN PROGRESS" : job.status ?? "WORKER ON WAY",
-        }));
+    Promise.all([apiFetch("/jobs"), apiFetch("/users"), apiFetch("/services")])
+      .then(async ([jobResponse, userResponse, serviceResponse]) => {
+        if (!jobResponse.ok || !userResponse.ok || !serviceResponse.ok) {
+          throw new Error("Backend records could not be loaded");
+        }
+
+        const [backendJobs, backendUsers, backendServices] = (await Promise.all([
+          jobResponse.json(),
+          userResponse.json(),
+          serviceResponse.json(),
+        ])) as [BackendJob[], BackendUser[], BackendService[]];
+        const activeJobs = backendJobs
+          .filter((job) => ["pending", "assigned", "in_progress"].includes(job.status || "pending"))
+          .slice(0, totalBackendJobs);
+        const etaResults = await Promise.all(
+          activeJobs.map(async (job) => {
+            try {
+              const etaResponse = await apiFetch(`/eta/jobs/${job._id}`);
+
+              if (!etaResponse.ok) return null;
+              return (await etaResponse.json()) as EtaPrediction;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        const usersById = new Map(backendUsers.map((user) => [user._id, user]));
+        const servicesById = new Map(backendServices.map((service) => [service._id, service]));
+        const formatted = activeJobs.map((job, index) => {
+          const service = job.service_id ? servicesById.get(job.service_id) : undefined;
+          const worker = job.worker_id ? usersById.get(job.worker_id) : undefined;
+          const eta = etaResults[index];
+          const serviceName = service?.name || "Service";
+          const workerName = worker?.name || "Unassigned";
+          const originLat = eta?.origin?.latitude ?? job.latitude ?? karachiCenter.lat;
+          const originLng = eta?.origin?.longitude ?? job.longitude ?? karachiCenter.lng;
+
+          return {
+            id: job.id ?? `#JOB-${index + 1}`,
+            service: serviceName,
+            icon: getJobIcon(serviceName),
+            area:
+              job.location ||
+              `${(job.latitude ?? karachiCenter.lat).toFixed(4)}, ${(
+                job.longitude ?? karachiCenter.lng
+              ).toFixed(4)}`,
+            worker: workerName,
+            initials:
+              workerName
+                .split(" ")
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase())
+                .join("") || "NA",
+            lat: originLat.toFixed(4),
+            lng: originLng.toFixed(4),
+            eta: eta?.eta_label ?? "Pending",
+            status:
+              job.status === "assigned"
+                ? "WORKER ON WAY"
+                : job.status === "in_progress"
+                  ? "IN PROGRESS"
+                  : job.status || "pending",
+          };
+        });
 
         setJobs(formatted);
         setLastUpdated(
@@ -120,7 +192,7 @@ function ActiveJobsPage() {
       })
       .catch(() => {
         toast.error("Unable to load active jobs", {
-          description: "Check that the backend is running on https://ustadgo.vercel.app/.",
+          description: "Check that the backend is running and your admin session is active.",
         });
       });
   };
@@ -252,13 +324,13 @@ function ActiveJobsPage() {
                 href={openMapsUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="absolute top-6 right-6 inline-flex h-10 items-center gap-2 rounded-xl bg-card px-4 text-sm font-semibold text-foreground shadow-md border border-border hover:bg-surface-muted"
+                className="absolute top-4 right-4 z-10 inline-flex h-10 items-center gap-2 rounded-xl bg-card px-4 text-sm font-semibold text-foreground shadow-md border border-border hover:bg-surface-muted"
               >
                 <ExternalLink className="size-4" />
                 Open in Maps
               </a>
 
-              <div className="absolute bottom-6 right-6 flex flex-col gap-2">
+              <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={() => setMapZoom((zoom) => Math.min(18, zoom + 1))}

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const prebookingSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   client_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   worker_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   service_id: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
@@ -12,6 +13,10 @@ const prebookingSchema = new mongoose.Schema({
   },
   notes: String,
   reliability_score: Number,
-}, { timestamps: true });
+  created_at: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
-module.exports = mongoose.model("Prebooking", prebookingSchema);
+module.exports = mongoose.model("Prebooking", prebookingSchema, "prebookings");

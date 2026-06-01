@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Wrench, MapPin, Eye, EyeOff, Shield } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Route = createFileRoute("/")({
   component: LoginPage,
@@ -18,8 +20,30 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      await login(email, password);
+      toast.success("Admin signed in", {
+        description: "Your session will expire in 5 minutes.",
+      });
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      toast.error("Login failed", {
+        description: error instanceof Error ? error.message : "Please check your credentials.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen grid lg:grid-cols-2 bg-background">
@@ -31,17 +55,14 @@ function LoginPage() {
         <div
           className="absolute inset-0 opacity-[0.15] pointer-events-none"
           style={{
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+            backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
             backgroundSize: "24px 24px",
           }}
         />
 
         <div className="relative flex justify-end">
           <div className="text-right">
-            <p className="text-[10px] font-semibold tracking-[0.2em] opacity-80">
-              SERVER
-            </p>
+            <p className="text-[10px] font-semibold tracking-[0.2em] opacity-80">SERVER</p>
             <p className="text-[10px] tracking-widest opacity-70 flex items-center gap-1.5 justify-end mt-1">
               PK-ISB-01
               <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.7)]" />
@@ -59,8 +80,8 @@ function LoginPage() {
             Manage the Hustle
           </h1>
           <p className="text-lg opacity-90 max-w-md leading-relaxed">
-            The Architectural Ledger for Pakistan's premier vocational and
-            technical education network.
+            The Architectural Ledger for Pakistan's premier vocational and technical education
+            network.
           </p>
 
           <div className="mt-12 flex items-center gap-3 max-w-sm">
@@ -80,20 +101,12 @@ function LoginPage() {
       {/* Right: Form panel */}
       <section className="flex flex-col justify-center px-6 sm:px-16 lg:px-24 py-16 relative">
         <div className="w-full max-w-md mx-auto">
-          <h2 className="text-4xl font-bold tracking-tight text-foreground">
-            Welcome Back
-          </h2>
+          <h2 className="text-4xl font-bold tracking-tight text-foreground">Welcome Back</h2>
           <p className="mt-3 text-foreground/70">
             Please enter your administrative credentials to continue.
           </p>
 
-          <form
-            className="mt-10 space-y-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              navigate({ to: "/dashboard" });
-            }}
-          >
+          <form className="mt-10 space-y-6" onSubmit={handleLogin}>
             <div className="space-y-2">
               <label
                 htmlFor="email"
@@ -104,7 +117,11 @@ function LoginPage() {
               <input
                 id="email"
                 type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="admin@ustadgo.pk"
+                required
+                autoComplete="email"
                 className="w-full h-14 px-5 rounded-xl bg-surface-muted border border-transparent text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand focus:bg-background transition-all"
                 style={{ boxShadow: "var(--shadow-input)" }}
               />
@@ -129,7 +146,11 @@ function LoginPage() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••••••"
+                  required
+                  autoComplete="current-password"
                   className="w-full h-14 px-5 pr-14 rounded-xl bg-surface-muted border border-transparent text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand focus:bg-background transition-all"
                   style={{ boxShadow: "var(--shadow-input)" }}
                 />
@@ -139,50 +160,25 @@ function LoginPage() {
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-foreground/50 hover:text-foreground transition-colors"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? (
-                    <EyeOff className="size-5" />
-                  ) : (
-                    <Eye className="size-5" />
-                  )}
+                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
                 </button>
               </div>
             </div>
 
-            <label className="flex items-center gap-3 cursor-pointer select-none group">
-              <span className="relative">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <span className="block size-5 rounded-md border-2 border-border peer-checked:bg-brand peer-checked:border-brand transition-colors" />
-                {remember && (
-                  <svg
-                    className="absolute inset-0 m-auto size-3.5 text-brand-foreground pointer-events-none"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  >
-                    <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="text-sm text-foreground/80">
-                Remember this device for 30 days
-              </span>
-            </label>
+            <div className="rounded-xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm text-foreground/80">
+              Admin sessions expire automatically after 5 minutes.
+            </div>
 
             <button
               type="submit"
+              disabled={isSubmitting}
               className="w-full h-14 rounded-full font-bold tracking-[0.15em] text-sm text-brand-foreground transition-transform hover:scale-[1.01] active:scale-[0.99]"
               style={{
                 background: "var(--gradient-brand)",
                 boxShadow: "var(--shadow-brand)",
               }}
             >
-              SIGN IN TO PORTAL
+              {isSubmitting ? "SIGNING IN..." : "SIGN IN TO PORTAL"}
             </button>
 
             <div className="flex justify-center pt-2">

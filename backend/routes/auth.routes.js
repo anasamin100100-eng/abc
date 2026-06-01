@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-const SECRET = "ustadgo-secret"; // later move to .env
+const SECRET = process.env.JWT_SECRET || "ustadgo-secret";
 
 // REGISTER
 router.post("/register", async (req, res) => {
@@ -33,14 +33,14 @@ router.post("/login", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ msg: "User not found" });
 
+    if (user.role !== "admin") {
+      return res.status(403).json({ msg: "Only admins can access this portal" });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: "Invalid password" });
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      SECRET,
-      { expiresIn: "1d" }
-    );
+    const token = jwt.sign({ id: user._id, role: user.role }, SECRET, { expiresIn: "5m" });
 
     res.json({ token, user });
   } catch (err) {

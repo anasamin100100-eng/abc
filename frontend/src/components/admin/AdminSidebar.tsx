@@ -14,20 +14,22 @@ import {
   Wrench,
   Star,
   Settings,
+  CalendarCheck,
 } from "lucide-react";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutGrid, to: "/dashboard" as const },
   { label: "Analytics", icon: BarChart3, to: "/analytics" as const },
-  { label: "All Users", icon: Users, to: "/dashboard" as const },
+  { label: "All Users", icon: Users, to: "/users" as const },
   { label: "Workers", icon: HardHat, to: "/workers" as const },
   { label: "Clients", icon: UserRound, to: "/clients" as const },
-  { label: "All Jobs", icon: Briefcase, to: "/dashboard" as const },
+  { label: "All Jobs", icon: Briefcase, to: "/all-jobs" as const },
   { label: "Active Jobs", icon: Activity, to: "/active-jobs" as const },
-  { label: "Job Requests", icon: ClipboardList, to: "/dashboard" as const },
-  { label: "Payments", icon: CreditCard, to: "/dashboard" as const },
-  { label: "Earnings Reports", icon: LineChart, to: "/dashboard" as const },
-  { label: "Withdrawals", icon: Wallet, to: "/dashboard" as const },
+  { label: "Job Requests", icon: ClipboardList, to: "/job-requests" as const },
+  { label: "Prebookings", icon: CalendarCheck, to: "/prebookings" as const },
+  { label: "Payments", icon: CreditCard, to: "/payments" as const },
+  { label: "Earnings Reports", icon: LineChart, to: "/earnings" as const },
+  { label: "Withdrawals", icon: Wallet, to: "/withdrawals" as const },
   { label: "Services", icon: Wrench, to: "/services" as const },
   { label: "Reviews", icon: Star, to: "/reviews" as const },
 ];

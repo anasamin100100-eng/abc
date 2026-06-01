@@ -1,5 +1,15 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  createRootRoute,
+  HeadContent,
+  Scripts,
+  useLocation,
+  useNavigate,
+} from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import AuthProvider, { useAuth } from "@/contexts/AuthContext";
 
 import appCss from "../styles.css?url";
 
@@ -67,9 +77,38 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <>
-      <Outlet />
+    <AuthProvider>
+      <AdminSessionGate />
       <Toaster richColors position="top-right" />
-    </>
+    </AuthProvider>
   );
+}
+
+function AdminSessionGate() {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const publicPaths = new Set(["/", "/login"]);
+  const isProtectedPath = !publicPaths.has(location.pathname);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated && isProtectedPath) {
+      navigate({
+        to: "/",
+        search: {
+          expired: "1",
+        },
+      });
+    }
+  }, [isAuthenticated, isProtectedPath, loading, navigate]);
+
+  if (isProtectedPath && (loading || !isAuthenticated)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-sm font-semibold text-muted-foreground">
+        Checking admin session...
+      </div>
+    );
+  }
+
+  return <Outlet />;
 }

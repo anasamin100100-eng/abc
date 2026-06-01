@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   UserRound,
@@ -14,12 +14,13 @@ import {
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell } from "recharts";
+import { apiFetch } from "@/utils/api";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
   head: () => ({
     meta: [
-      { title: "Dashboard — UstadGo Admin" },
+      { title: "Dashboard - UstadGo Admin" },
       {
         name: "description",
         content:
@@ -29,94 +30,95 @@ export const Route = createFileRoute("/dashboard")({
   }),
 });
 
-const stats = [
-  {
-    label: "TOTAL USERS",
-    value: "3,847",
-    change: "12.5%",
-    icon: UserRound,
-    iconBg: "bg-brand/10",
-    iconColor: "text-brand",
-  },
-  {
-    label: "TOTAL WORKERS",
-    value: "1,204",
-    change: "8.2%",
-    icon: HardHat,
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-  },
-  {
-    label: "TOTAL JOBS",
-    value: "8,932",
-    change: "24.1%",
-    icon: Briefcase,
-    iconBg: "bg-brand/10",
-    iconColor: "text-brand",
-  },
-  {
-    label: "TOTAL REVENUE",
-    value: "Rs. 2.4M",
-    change: "18.7%",
-    icon: HandCoins,
-    iconBg: "bg-orange-100",
-    iconColor: "text-orange-500",
-  },
-];
-
-const chartData = [
-  { day: "MON", posted: 45, completed: 30 },
-  { day: "TUE", posted: 75, completed: 55 },
-  { day: "WED", posted: 95, completed: 70 },
-  { day: "THU", posted: 50, completed: 45 },
-  { day: "FRI", posted: 110, completed: 95 },
-  { day: "SAT", posted: 85, completed: 75 },
-];
-
-const verifications = [
-  {
-    initials: "BS",
-    name: "Bilal Siddiqui",
-    role: "Electrician • Karachi Central",
-  },
-  {
-    initials: "FB",
-    name: "Faiza Batool",
-    role: "Home Cleaner • Clifton",
-  },
-];
-
-const jobRequests = [
-  {
-    initials: "ZK",
-    client: "Zaid Khan",
-    category: "Electrician",
-    location: "Gulshan-e-Iqbal",
-    budget: "Rs. 2,500",
-    status: "PENDING",
-    statusClass: "bg-amber-100 text-amber-700",
-  },
-  {
-    initials: "SA",
-    client: "Sara Ahmed",
-    category: "Plumbing",
-    location: "DHA Phase 6",
-    budget: "Rs. 1,800",
-    status: "ASSIGNED",
-    statusClass: "bg-brand/10 text-brand",
-  },
-  {
-    initials: "OM",
-    client: "Omar Malik",
-    category: "AC Repair",
-    location: "North Nazimabad",
-    budget: "Rs. 4,500",
-    status: "ACTIVE",
-    statusClass: "bg-emerald-100 text-emerald-700",
-  },
-];
-
 type VerificationStatus = "pending" | "approved" | "rejected";
+type JobStatus = "pending" | "assigned" | "in_progress" | "completed" | "cancelled";
+
+type DashboardStats = {
+  totals: {
+    users: number;
+    workers: number;
+    clients: number;
+    services: number;
+    jobs: number;
+    payments: number;
+    revenue: number;
+    pendingPayments: number;
+  };
+  workers: {
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
+  jobs: {
+    pending: number;
+    assigned: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+  };
+  payments: {
+    pending: number;
+    completed: number;
+    failed: number;
+    refunded: number;
+  };
+  chartData: Array<{
+    day: string;
+    posted: number;
+    completed: number;
+  }>;
+  pendingWorkers: Array<{
+    id: string;
+    initials: string;
+    name: string;
+    role: string;
+  }>;
+  recentJobs: Array<{
+    id: string;
+    jobId: string;
+    initials: string;
+    client: string;
+    worker: string;
+    category: string;
+    location: string;
+    budget: string;
+    status: JobStatus;
+  }>;
+};
+
+const emptyStats: DashboardStats = {
+  totals: {
+    users: 0,
+    workers: 0,
+    clients: 0,
+    services: 0,
+    jobs: 0,
+    payments: 0,
+    revenue: 0,
+    pendingPayments: 0,
+  },
+  workers: {
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  },
+  jobs: {
+    pending: 0,
+    assigned: 0,
+    inProgress: 0,
+    completed: 0,
+    cancelled: 0,
+  },
+  payments: {
+    pending: 0,
+    completed: 0,
+    failed: 0,
+    refunded: 0,
+  },
+  chartData: [],
+  pendingWorkers: [],
+  recentJobs: [],
+};
 
 const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
@@ -127,76 +129,175 @@ const karachiMapCenter = {
 
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
+const jobStatusClasses: Record<JobStatus, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  assigned: "bg-brand/10 text-brand",
+  in_progress: "bg-cyan-100 text-cyan-700",
+  completed: "bg-emerald-100 text-emerald-700",
+  cancelled: "bg-rose-100 text-rose-700",
+};
+
+const jobStatusLabels: Record<JobStatus, string> = {
+  pending: "PENDING",
+  assigned: "ASSIGNED",
+  in_progress: "IN PROGRESS",
+  completed: "COMPLETED",
+  cancelled: "CANCELLED",
+};
+
+const formatNumber = (value: number) => value.toLocaleString();
+const formatCurrency = (value: number) => `Rs. ${value.toLocaleString()}`;
+
 function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [verificationStatuses, setVerificationStatuses] = useState<
-    Record<string, VerificationStatus>
-  >(() =>
-    verifications.reduce(
-      (acc, verification) => ({
-        ...acc,
-        [verification.name]: "pending" as VerificationStatus,
-      }),
-      {},
-    ),
-  );
+  const [stats, setStats] = useState<DashboardStats>(emptyStats);
+  const [loading, setLoading] = useState(true);
+  const [updatingWorkerId, setUpdatingWorkerId] = useState<string | null>(null);
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const visibleVerifications = useMemo(() => {
-    if (!normalizedSearch) return verifications;
+  const loadStats = async () => {
+    setLoading(true);
 
-    return verifications.filter((verification) =>
-      [verification.name, verification.role, verification.initials].some((value) =>
+    try {
+      const response = await apiFetch("/dashboard/stats");
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Could not load dashboard stats");
+      }
+
+      setStats((await response.json()) as DashboardStats);
+    } catch (error) {
+      toast.error("Dashboard stats could not be loaded", {
+        description: error instanceof Error ? error.message : "Please restart the backend server.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const statCards = [
+    {
+      label: "TOTAL USERS",
+      value: formatNumber(stats.totals.users),
+      subtext: `${formatNumber(stats.totals.clients)} clients`,
+      icon: UserRound,
+      iconBg: "bg-brand/10",
+      iconColor: "text-brand",
+    },
+    {
+      label: "TOTAL WORKERS",
+      value: formatNumber(stats.totals.workers),
+      subtext: `${formatNumber(stats.workers.pending)} pending approval`,
+      icon: HardHat,
+      iconBg: "bg-emerald-100",
+      iconColor: "text-emerald-600",
+    },
+    {
+      label: "TOTAL JOBS",
+      value: formatNumber(stats.totals.jobs),
+      subtext: `${formatNumber(stats.jobs.completed)} completed`,
+      icon: Briefcase,
+      iconBg: "bg-brand/10",
+      iconColor: "text-brand",
+    },
+    {
+      label: "TOTAL REVENUE",
+      value: formatCurrency(stats.totals.revenue),
+      subtext: `${formatNumber(stats.payments.pending)} pending payments`,
+      icon: HandCoins,
+      iconBg: "bg-orange-100",
+      iconColor: "text-orange-500",
+    },
+  ];
+
+  const visibleVerifications = useMemo(() => {
+    if (!normalizedSearch) return stats.pendingWorkers;
+
+    return stats.pendingWorkers.filter((worker) =>
+      [worker.name, worker.role, worker.initials].some((value) =>
         value.toLowerCase().includes(normalizedSearch),
       ),
     );
-  }, [normalizedSearch]);
+  }, [normalizedSearch, stats.pendingWorkers]);
 
   const visibleJobRequests = useMemo(() => {
-    if (!normalizedSearch) return jobRequests;
+    if (!normalizedSearch) return stats.recentJobs;
 
-    return jobRequests.filter((request) =>
+    return stats.recentJobs.filter((request) =>
       [
+        request.jobId,
         request.client,
+        request.worker,
         request.category,
         request.location,
         request.budget,
-        request.status,
+        jobStatusLabels[request.status],
         request.initials,
       ].some((value) => value.toLowerCase().includes(normalizedSearch)),
     );
-  }, [normalizedSearch]);
+  }, [normalizedSearch, stats.recentJobs]);
 
   const resultCount = visibleVerifications.length + visibleJobRequests.length;
+  const activeJobs = stats.jobs.pending + stats.jobs.assigned + stats.jobs.inProgress;
+  const totalJobsForSummary = Math.max(stats.totals.jobs, 1);
+  const activePercent = Math.round((activeJobs / totalJobsForSummary) * 100);
+  const completedPercent = Math.round((stats.jobs.completed / totalJobsForSummary) * 100);
+  const cancelledPercent = Math.max(0, 100 - activePercent - completedPercent);
 
-  const handleVerification = (name: string, nextStatus: Exclude<VerificationStatus, "pending">) => {
-    setVerificationStatuses((current) => ({
-      ...current,
-      [name]: nextStatus,
-    }));
-    toast.success(`${name} ${nextStatus === "approved" ? "approved" : "rejected"}`, {
-      description: "Verification queue updated.",
-    });
+  const handleVerification = async (
+    workerId: string,
+    name: string,
+    nextStatus: Exclude<VerificationStatus, "pending">,
+  ) => {
+    setUpdatingWorkerId(workerId);
+
+    try {
+      const response = await apiFetch(`/workers/${workerId}`, {
+        method: "PUT",
+        body: JSON.stringify({ verification_status: nextStatus }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Worker verification update failed");
+      }
+
+      toast.success(`${name} ${nextStatus === "approved" ? "approved" : "rejected"}`, {
+        description: "Dashboard stats refreshed from MongoDB.",
+      });
+      await loadStats();
+    } catch (error) {
+      toast.error("Verification was not updated", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setUpdatingWorkerId(null);
+    }
   };
 
   const handleExportReports = () => {
     const rows = [
       ["Section", "Name", "Category/Role", "Location/Budget", "Status"],
-      ...jobRequests.map((request) => [
+      ...stats.recentJobs.map((request) => [
         "Job Request",
-        request.client,
+        `${request.jobId} - ${request.client}`,
         request.category,
-        request.location,
-        `${request.budget} - ${request.status}`,
+        `${request.location} / ${request.budget}`,
+        jobStatusLabels[request.status],
       ]),
-      ...verifications.map((verification) => [
+      ...stats.pendingWorkers.map((worker) => [
         "Verification",
-        verification.name,
-        verification.role,
+        worker.name,
+        worker.role,
         "",
-        verificationStatuses[verification.name] ?? "pending",
+        "pending",
       ]),
-      ...stats.map((stat) => ["Metric", stat.label, stat.value, "", `${stat.change} growth`]),
+      ...statCards.map((stat) => ["Metric", stat.label, stat.value, "", stat.subtext]),
     ];
     const csv = rows.map((row) => row.map((cell) => csvEscape(String(cell))).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -209,7 +310,7 @@ function DashboardPage() {
     link.remove();
     URL.revokeObjectURL(url);
     toast.success("Dashboard report downloaded", {
-      description: "The CSV export includes jobs, verification, and metrics.",
+      description: "The CSV export includes live MongoDB jobs, verification, and metrics.",
     });
   };
 
@@ -217,7 +318,6 @@ function DashboardPage() {
     <div className="min-h-screen bg-surface-muted flex">
       <AdminSidebar active="Dashboard" />
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         <AdminTopbar>
           <div className="max-w-xl relative">
@@ -233,14 +333,13 @@ function DashboardPage() {
         </AdminTopbar>
 
         <main className="flex-1 px-6 lg:px-10 py-8 space-y-8">
-          {/* Header row */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">
                 Dashboard Overview
               </h2>
               <p className="text-muted-foreground mt-1">
-                Platform performance and activity across Pakistan.
+                Live platform performance from MongoDB.
               </p>
             </div>
             <button
@@ -252,6 +351,13 @@ function DashboardPage() {
               Export Reports
             </button>
           </div>
+
+          {loading && (
+            <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Loading live dashboard stats...
+            </div>
+          )}
+
           {searchTerm && (
             <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground">
               {resultCount > 0 ? (
@@ -267,9 +373,8 @@ function DashboardPage() {
             </div>
           )}
 
-          {/* Stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-            {stats.map((stat) => {
+            {statCards.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
@@ -284,19 +389,19 @@ function DashboardPage() {
                     </div>
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
                       <TrendingUp className="size-3" />
-                      {stat.change}
+                      Live
                     </span>
                   </div>
                   <p className="text-[11px] font-bold tracking-widest text-muted-foreground mt-5">
                     {stat.label}
                   </p>
                   <p className="text-3xl font-bold text-foreground mt-1">{stat.value}</p>
+                  <p className="mt-2 text-xs font-semibold text-muted-foreground">{stat.subtext}</p>
                 </div>
               );
             })}
           </div>
 
-          {/* Charts row */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-2 bg-background rounded-2xl border border-border p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">
@@ -314,7 +419,7 @@ function DashboardPage() {
               </div>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barGap={6}>
+                  <BarChart data={stats.chartData} barGap={6}>
                     <XAxis
                       dataKey="day"
                       axisLine={false}
@@ -326,12 +431,12 @@ function DashboardPage() {
                       }}
                     />
                     <Bar dataKey="posted" radius={[8, 8, 0, 0]}>
-                      {chartData.map((_, i) => (
+                      {stats.chartData.map((_, i) => (
                         <Cell key={i} fill="var(--brand)" fillOpacity={0.35} />
                       ))}
                     </Bar>
                     <Bar dataKey="completed" radius={[8, 8, 0, 0]}>
-                      {chartData.map((_, i) => (
+                      {stats.chartData.map((_, i) => (
                         <Cell key={i} fill="oklch(0.78 0.13 165)" />
                       ))}
                     </Bar>
@@ -343,68 +448,56 @@ function DashboardPage() {
             <div className="bg-background rounded-2xl border border-border p-6 shadow-sm">
               <h3 className="text-lg font-bold text-foreground mb-5">Verification Queue</h3>
               <div className="space-y-4">
-                {visibleVerifications.map((v) => {
-                  const status = verificationStatuses[v.name] ?? "pending";
-                  return (
-                    <div key={v.name} className="p-4 rounded-xl bg-surface-muted/60">
-                      <div className="flex items-center gap-3">
-                        <div className="size-12 rounded-full bg-gradient-to-br from-brand to-brand-light flex items-center justify-center text-brand-foreground font-bold text-sm">
-                          {v.initials}
-                        </div>
-                        <div>
-                          <p className="font-bold text-foreground text-sm">{v.name}</p>
-                          <p className="text-xs text-muted-foreground">{v.role}</p>
-                        </div>
+                {visibleVerifications.map((worker) => (
+                  <div key={worker.id} className="p-4 rounded-xl bg-surface-muted/60">
+                    <div className="flex items-center gap-3">
+                      <div className="size-12 rounded-full bg-gradient-to-br from-brand to-brand-light flex items-center justify-center text-brand-foreground font-bold text-sm">
+                        {worker.initials}
                       </div>
-                      {status !== "pending" && (
-                        <div
-                          className={`mt-3 rounded-lg px-3 py-2 text-xs font-bold ${
-                            status === "approved"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {status === "approved" ? "APPROVED" : "REJECTED"}
-                        </div>
-                      )}
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          type="button"
-                          disabled={status === "approved"}
-                          onClick={() => handleVerification(v.name, "approved")}
-                          className="flex-1 h-9 rounded-lg bg-brand text-brand-foreground text-xs font-bold hover:bg-brand-light transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          disabled={status === "rejected"}
-                          onClick={() => handleVerification(v.name, "rejected")}
-                          className="flex-1 h-9 rounded-lg border border-border text-foreground text-xs font-bold hover:bg-surface-muted transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Reject
-                        </button>
+                      <div>
+                        <p className="font-bold text-foreground text-sm">{worker.name}</p>
+                        <p className="text-xs text-muted-foreground">{worker.role}</p>
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        type="button"
+                        disabled={updatingWorkerId === worker.id}
+                        onClick={() => handleVerification(worker.id, worker.name, "approved")}
+                        className="flex-1 h-9 rounded-lg bg-brand text-brand-foreground text-xs font-bold hover:bg-brand-light transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updatingWorkerId === worker.id}
+                        onClick={() => handleVerification(worker.id, worker.name, "rejected")}
+                        className="flex-1 h-9 rounded-lg border border-border text-foreground text-xs font-bold hover:bg-surface-muted transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
                 {visibleVerifications.length === 0 && (
                   <div className="rounded-xl bg-surface-muted/60 p-4 text-sm text-muted-foreground">
-                    No workers match this search.
+                    No pending workers match this search.
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Recent Job Requests + Platform Summary */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-2 bg-background rounded-2xl border border-border p-6 shadow-sm">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold text-foreground">Recent Job Requests</h3>
-                <button className="text-sm font-semibold text-brand hover:text-brand-light transition-colors">
+                <Link
+                  to="/job-requests"
+                  className="text-sm font-semibold text-brand hover:text-brand-light transition-colors"
+                >
                   View All
-                </button>
+                </Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -418,24 +511,31 @@ function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleJobRequests.map((r) => (
-                      <tr key={r.client} className="border-b border-border last:border-0">
+                    {visibleJobRequests.map((request) => (
+                      <tr key={request.id} className="border-b border-border last:border-0">
                         <td className="py-4 pr-4">
                           <div className="flex items-center gap-3">
                             <div className="size-9 rounded-full bg-gradient-to-br from-brand to-brand-light flex items-center justify-center text-brand-foreground font-bold text-xs">
-                              {r.initials}
+                              {request.initials}
                             </div>
-                            <span className="font-semibold text-foreground">{r.client}</span>
+                            <div>
+                              <span className="font-semibold text-foreground">{request.client}</span>
+                              <p className="text-xs text-muted-foreground">
+                                Worker: {request.worker}
+                              </p>
+                            </div>
                           </div>
                         </td>
-                        <td className="py-4 pr-4 text-foreground/80">{r.category}</td>
-                        <td className="py-4 pr-4 text-foreground/80">{r.location}</td>
-                        <td className="py-4 pr-4 font-semibold text-foreground">{r.budget}</td>
+                        <td className="py-4 pr-4 text-foreground/80">{request.category}</td>
+                        <td className="py-4 pr-4 text-foreground/80">{request.location}</td>
+                        <td className="py-4 pr-4 font-semibold text-foreground">
+                          {request.budget}
+                        </td>
                         <td className="py-4">
                           <span
-                            className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider ${r.statusClass}`}
+                            className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider ${jobStatusClasses[request.status]}`}
                           >
-                            {r.status}
+                            {jobStatusLabels[request.status]}
                           </span>
                         </td>
                       </tr>
@@ -455,12 +555,24 @@ function DashboardPage() {
             <div className="bg-background rounded-2xl border border-border p-6 shadow-sm">
               <h3 className="text-lg font-bold text-foreground mb-6">Platform Summary</h3>
               <div className="flex justify-center mb-6">
-                <DonutChart />
+                <DonutChart
+                  activePercent={activePercent}
+                  completedPercent={completedPercent}
+                  cancelledPercent={cancelledPercent}
+                />
               </div>
               <div className="space-y-3 text-sm">
-                <SummaryRow color="bg-brand" label="Active Jobs" value="65%" />
-                <SummaryRow color="bg-emerald-400" label="Completed" value="25%" />
-                <SummaryRow color="bg-muted-foreground/40" label="Disputed" value="10%" />
+                <SummaryRow color="bg-brand" label="Active Jobs" value={`${activePercent}%`} />
+                <SummaryRow
+                  color="bg-emerald-400"
+                  label="Completed"
+                  value={`${completedPercent}%`}
+                />
+                <SummaryRow
+                  color="bg-muted-foreground/40"
+                  label="Cancelled"
+                  value={`${cancelledPercent}%`}
+                />
               </div>
             </div>
           </div>
@@ -484,14 +596,22 @@ function SummaryRow({ color, label, value }: { color: string; label: string; val
   );
 }
 
-function DonutChart() {
+function DonutChart({
+  activePercent,
+  cancelledPercent,
+  completedPercent,
+}: {
+  activePercent: number;
+  cancelledPercent: number;
+  completedPercent: number;
+}) {
   const radius = 70;
   const stroke = 18;
   const circumference = 2 * Math.PI * radius;
   const segments = [
-    { value: 65, color: "var(--brand)" },
-    { value: 25, color: "oklch(0.78 0.13 165)" },
-    { value: 10, color: "oklch(0.9 0.005 255)" },
+    { value: activePercent, color: "var(--brand)" },
+    { value: completedPercent, color: "oklch(0.78 0.13 165)" },
+    { value: cancelledPercent, color: "oklch(0.9 0.005 255)" },
   ];
 
   let offset = 0;
@@ -519,8 +639,8 @@ function DonutChart() {
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="text-3xl font-bold text-foreground">84%</p>
-        <p className="text-[10px] font-bold tracking-widest text-muted-foreground">EFFICIENCY</p>
+        <p className="text-3xl font-bold text-foreground">{completedPercent}%</p>
+        <p className="text-[10px] font-bold tracking-widest text-muted-foreground">COMPLETED</p>
       </div>
     </div>
   );
@@ -535,8 +655,32 @@ function GoogleMapsPanel() {
   const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${karachiMapCenter.lat},${karachiMapCenter.lng}`;
 
   return (
-    <div className="bg-background rounded-2xl border border-border overflow-hidden shadow-sm">
-      <div className="relative h-80 bg-slate-100">
+    <div className="bg-background rounded-2xl border border-border shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-bold text-sm text-foreground">Active Jobs Near Karachi</p>
+          <div className="flex flex-wrap items-center gap-4 mt-1.5 text-[10px] font-bold tracking-widest">
+            <span className="flex items-center gap-1.5 text-foreground/70">
+              <span className="size-2 rounded-full bg-brand" />
+              URGENT
+            </span>
+            <span className="flex items-center gap-1.5 text-foreground/70">
+              <span className="size-2 rounded-full bg-orange-400" />
+              SCHEDULED
+            </span>
+          </div>
+        </div>
+        <a
+          href={googleMapsLink}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold text-foreground shadow-sm hover:bg-surface-muted"
+        >
+          <ExternalLink className="size-4" />
+          Open in Maps
+        </a>
+      </div>
+      <div className="relative h-80 overflow-hidden rounded-b-2xl bg-slate-100">
         {mapUrl ? (
           <iframe
             title="Active jobs near Karachi"
@@ -557,28 +701,6 @@ function GoogleMapsPanel() {
             </div>
           </div>
         )}
-        <div className="absolute top-5 left-5 bg-background/95 backdrop-blur rounded-xl px-4 py-3 shadow-md">
-          <p className="font-bold text-sm text-foreground">Active Jobs Near Karachi</p>
-          <div className="flex items-center gap-4 mt-1.5 text-[10px] font-bold tracking-widest">
-            <span className="flex items-center gap-1.5 text-foreground/70">
-              <span className="size-2 rounded-full bg-brand" />
-              URGENT
-            </span>
-            <span className="flex items-center gap-1.5 text-foreground/70">
-              <span className="size-2 rounded-full bg-orange-400" />
-              SCHEDULED
-            </span>
-          </div>
-        </div>
-        <a
-          href={googleMapsLink}
-          target="_blank"
-          rel="noreferrer"
-          className="absolute bottom-5 right-5 inline-flex h-10 items-center gap-2 rounded-xl bg-background px-4 text-sm font-semibold text-foreground shadow-md hover:bg-surface-muted"
-        >
-          <ExternalLink className="size-4" />
-          Open map
-        </a>
       </div>
     </div>
   );

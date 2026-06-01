@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const workerTrackingSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   worker_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   job_id: { type: mongoose.Schema.Types.ObjectId, ref: "JobRequest" },
   latitude: {
@@ -22,4 +23,4 @@ const workerTrackingSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model("WorkerTracking", workerTrackingSchema);
+module.exports = mongoose.model("WorkerTracking", workerTrackingSchema, "worker_tracking");

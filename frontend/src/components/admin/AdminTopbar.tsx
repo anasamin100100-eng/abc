@@ -1,6 +1,7 @@
 import { Bell, HelpCircle, LogOut, Settings, UserRound } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AdminTopbarProps {
   name?: string;
@@ -16,8 +17,10 @@ export function AdminTopbar({
   children,
 }: AdminTopbarProps) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleSignOut = () => {
+    logout();
     navigate({ to: "/" });
   };
 

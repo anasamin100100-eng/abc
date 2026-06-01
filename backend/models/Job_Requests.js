@@ -26,8 +26,11 @@ const jobRequestSchema = new mongoose.Schema({
     enum: ["pending", "accepted", "rejected"],
     default: "pending",
   },
-  requested_at: Date,
+  requested_at: {
+    type: Date,
+    default: Date.now,
+  },
   completed_at: Date,
-}, { timestamps: true });
+});
 
-module.exports = mongoose.model("JobRequest", jobRequestSchema);
+module.exports = mongoose.model("JobRequest", jobRequestSchema, "job_requests");

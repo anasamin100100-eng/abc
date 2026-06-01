@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Search, Plus, Zap, Wrench, Hammer, Brush, Sparkles } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell } from "recharts";
+import { apiFetch } from "@/utils/api";
 
 export const Route = createFileRoute("/services")({
   component: ServicesPage,
@@ -27,9 +28,29 @@ export const Route = createFileRoute("/services")({
   }),
 });
 
+type BackendService = {
+  _id: string;
+  id?: number;
+  name?: string;
+  category_type?: string;
+  description?: string;
+};
+
+type BackendWorker = {
+  service_id?: string;
+};
+
+type BackendJob = {
+  service_id?: string;
+  status?: string;
+};
+
 type Service = {
+  mongoId: string;
+  id: string;
   name: string;
   category: string;
+  description: string;
   workers: number;
   jobs: number;
   icon: typeof Zap;
@@ -45,111 +66,156 @@ const serviceTones = [
   { icon: Sparkles, tone: "text-rose-600 bg-rose-500/10", jobsTone: "text-rose-600" },
 ];
 
-const initialServices: Service[] = [
-  {
-    name: "Electrician",
-    category: "MAIN MAINTENANCE",
-    workers: 142,
-    jobs: 38,
-    ...serviceTones[0],
-  },
-  {
-    name: "Plumber",
-    category: "MAIN MAINTENANCE",
-    workers: 98,
-    jobs: 12,
-    ...serviceTones[1],
-  },
-  {
-    name: "Carpenter",
-    category: "FURNITURE & WOOD",
-    workers: 64,
-    jobs: 21,
-    ...serviceTones[2],
-  },
-  {
-    name: "Painter",
-    category: "HOME RENOVATION",
-    workers: 45,
-    jobs: 7,
-    ...serviceTones[3],
-  },
-  {
-    name: "House Keeping",
-    category: "SANITATION",
-    workers: 210,
-    jobs: 89,
-    ...serviceTones[4],
-  },
+const chartColors = [
+  "hsl(217, 91%, 60%)",
+  "hsl(189, 85%, 50%)",
+  "hsl(38, 92%, 55%)",
+  "hsl(160, 70%, 45%)",
+  "hsl(346, 80%, 55%)",
+  "hsl(262, 70%, 60%)",
 ];
 
+const activeJobStatuses = new Set(["pending", "assigned", "in_progress"]);
+
 function ServicesPage() {
-  const [services, setServices] = useState<Service[]>(initialServices);
+  const [services, setServices] = useState<Service[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [newService, setNewService] = useState({
     name: "",
     category: "",
-    workers: "",
-    jobs: "",
+    description: "",
   });
   const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const mapServices = (
+    backendServices: BackendService[],
+    backendWorkers: BackendWorker[],
+    backendJobs: BackendJob[],
+  ) => {
+    return backendServices.map((service, index) => {
+      const tone = serviceTones[index % serviceTones.length];
+      const workerCount = backendWorkers.filter((worker) => worker.service_id === service._id).length;
+      const activeJobs = backendJobs.filter(
+        (job) => job.service_id === service._id && activeJobStatuses.has(job.status || "pending"),
+      ).length;
+
+      return {
+        mongoId: service._id,
+        id: service.id ? String(service.id) : service._id,
+        name: service.name || "Unnamed Service",
+        category: (service.category_type || "General").toUpperCase(),
+        description: service.description || "No description provided.",
+        workers: workerCount,
+        jobs: activeJobs,
+        ...tone,
+      };
+    });
+  };
+
+  const loadServices = async () => {
+    setLoading(true);
+
+    try {
+      const [serviceResponse, workerResponse, jobResponse] = await Promise.all([
+        apiFetch("/services"),
+        apiFetch("/workers"),
+        apiFetch("/jobs"),
+      ]);
+
+      if (!serviceResponse.ok || !workerResponse.ok || !jobResponse.ok) {
+        throw new Error("Could not load service records from backend");
+      }
+
+      const [backendServices, backendWorkers, backendJobs] = (await Promise.all([
+        serviceResponse.json(),
+        workerResponse.json(),
+        jobResponse.json(),
+      ])) as [BackendService[], BackendWorker[], BackendJob[]];
+
+      setServices(mapServices(backendServices, backendWorkers, backendJobs));
+    } catch (error) {
+      toast.error("Services could not be loaded", {
+        description: error instanceof Error ? error.message : "Please check the backend server.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadServices();
+  }, []);
 
   const visibleServices = useMemo(() => {
     if (!normalizedSearch) return services;
 
     return services.filter((service) =>
-      [service.name, service.category].some((value) =>
+      [service.name, service.category, service.description].some((value) =>
         value.toLowerCase().includes(normalizedSearch),
       ),
     );
   }, [normalizedSearch, services]);
 
   const distribution = services.map((service, index) => ({
-    name: service.name.slice(0, 6),
+    name: service.name.slice(0, 8),
     v: service.workers,
-    color:
-      [
-        "hsl(217, 91%, 60%)",
-        "hsl(189, 85%, 50%)",
-        "hsl(38, 92%, 55%)",
-        "hsl(160, 70%, 45%)",
-        "hsl(346, 80%, 55%)",
-        "hsl(262, 70%, 60%)",
-      ][index % 6] ?? "hsl(220, 15%, 70%)",
+    color: chartColors[index % chartColors.length] ?? "hsl(220, 15%, 70%)",
   }));
 
-  const handleAddService = (event: React.FormEvent<HTMLFormElement>) => {
+  const totalWorkers = services.reduce((sum, service) => sum + service.workers, 0);
+  const totalActiveJobs = services.reduce((sum, service) => sum + service.jobs, 0);
+  const busiestService = services.reduce<Service | null>(
+    (current, service) => (!current || service.jobs > current.jobs ? service : current),
+    null,
+  );
+
+  const handleAddService = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const name = newService.name.trim();
-    const category = newService.category.trim().toUpperCase();
-    const workers = Number(newService.workers);
-    const jobs = Number(newService.jobs);
+    const category = newService.category.trim();
+    const description = newService.description.trim();
 
-    if (!name || !category || !Number.isFinite(workers) || !Number.isFinite(jobs)) {
+    if (!name || !category || !description) {
       toast.error("Complete the service form", {
-        description: "Name, category, workers, and active jobs are required.",
+        description: "Name, category, and description are required.",
       });
       return;
     }
 
-    const tone = serviceTones[services.length % serviceTones.length];
-    setServices((current) => [
-      ...current,
-      {
-        name,
-        category,
-        workers: Math.max(0, workers),
-        jobs: Math.max(0, jobs),
-        ...tone,
-      },
-    ]);
-    setIsDialogOpen(false);
-    setNewService({ name: "", category: "", workers: "", jobs: "" });
-    toast.success("Service added", {
-      description: `${name} is now visible in Services Management.`,
-    });
+    setIsSaving(true);
+
+    try {
+      const response = await apiFetch("/services", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          category_type: category,
+          description,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Service was not saved");
+      }
+
+      await loadServices();
+      setIsDialogOpen(false);
+      setNewService({ name: "", category: "", description: "" });
+      toast.success("Service added", {
+        description: `${name} has been saved in MongoDB.`,
+      });
+    } catch (error) {
+      toast.error("Service was not added", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -177,8 +243,8 @@ function ServicesPage() {
               </p>
               <h1 className="text-3xl font-bold tracking-tight mt-1">Services Management</h1>
               <p className="text-muted-foreground mt-1">
-                Overview of available vocational services and their current workload across
-                Pakistan.
+                Services are now loaded from MongoDB, with worker and active job counts calculated
+                from backend records.
               </p>
             </div>
             <button
@@ -197,43 +263,75 @@ function ServicesPage() {
             </div>
           )}
 
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="rounded-2xl border border-border bg-background p-5">
+              <p className="text-[10px] font-bold tracking-widest text-muted-foreground">
+                TOTAL SERVICES
+              </p>
+              <p className="mt-2 text-3xl font-bold">{services.length}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background p-5">
+              <p className="text-[10px] font-bold tracking-widest text-muted-foreground">
+                LINKED WORKERS
+              </p>
+              <p className="mt-2 text-3xl font-bold">{totalWorkers}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background p-5">
+              <p className="text-[10px] font-bold tracking-widest text-muted-foreground">
+                ACTIVE JOBS
+              </p>
+              <p className="mt-2 text-3xl font-bold text-brand">{totalActiveJobs}</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
-            {visibleServices.map((service) => {
-              const Icon = service.icon;
-              return (
-                <div
-                  key={service.name}
-                  className="bg-background rounded-2xl p-5 border border-border hover:shadow-md transition-shadow"
-                >
+            {loading && (
+              <div className="col-span-full rounded-2xl border border-border bg-background p-8 text-center text-sm text-muted-foreground">
+                Loading services from backend...
+              </div>
+            )}
+
+            {!loading &&
+              visibleServices.map((service) => {
+                const Icon = service.icon;
+                return (
                   <div
-                    className={`size-12 rounded-full flex items-center justify-center ${service.tone}`}
+                    key={service.mongoId}
+                    className="bg-background rounded-2xl p-5 border border-border hover:shadow-md transition-shadow"
                   >
-                    <Icon className="size-5" />
-                  </div>
-                  <h3 className="mt-4 font-bold text-lg">{service.name}</h3>
-                  <p className="text-[10px] tracking-widest font-semibold text-muted-foreground mt-1">
-                    {service.category}
-                  </p>
-                  <div className="mt-5 flex items-end justify-between">
-                    <div>
-                      <p className="text-2xl font-bold">{service.workers}</p>
-                      <p className="text-[10px] tracking-widest font-semibold text-muted-foreground">
-                        WORKERS
-                      </p>
+                    <div
+                      className={`size-12 rounded-full flex items-center justify-center ${service.tone}`}
+                    >
+                      <Icon className="size-5" />
                     </div>
-                    <div className="text-right">
-                      <p className={`text-2xl font-bold ${service.jobsTone}`}>
-                        {String(service.jobs).padStart(2, "0")}
-                      </p>
-                      <p className="text-[10px] tracking-widest font-semibold text-muted-foreground">
-                        ACTIVE JOBS
-                      </p>
+                    <h3 className="mt-4 font-bold text-lg">{service.name}</h3>
+                    <p className="text-[10px] tracking-widest font-semibold text-muted-foreground mt-1">
+                      {service.category}
+                    </p>
+                    <p className="mt-3 min-h-10 text-xs leading-5 text-muted-foreground">
+                      {service.description}
+                    </p>
+                    <div className="mt-5 flex items-end justify-between">
+                      <div>
+                        <p className="text-2xl font-bold">{service.workers}</p>
+                        <p className="text-[10px] tracking-widest font-semibold text-muted-foreground">
+                          WORKERS
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-2xl font-bold ${service.jobsTone}`}>
+                          {String(service.jobs).padStart(2, "0")}
+                        </p>
+                        <p className="text-[10px] tracking-widest font-semibold text-muted-foreground">
+                          ACTIVE JOBS
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-            {visibleServices.length === 0 && (
+                );
+              })}
+
+            {!loading && visibleServices.length === 0 && (
               <div className="col-span-full rounded-2xl border border-border bg-background p-8 text-center text-sm text-muted-foreground">
                 No services match this search.
               </div>
@@ -268,23 +366,25 @@ function ServicesPage() {
             <div className="bg-background rounded-2xl p-6 border border-border space-y-5">
               <div>
                 <h3 className="text-lg font-bold">Market Status</h3>
-                <p className="text-sm text-muted-foreground">Live demand & revenue</p>
+                <p className="text-sm text-muted-foreground">Live demand from backend jobs</p>
               </div>
 
               <div className="rounded-2xl bg-emerald-500/10 px-4 py-3">
-                <p className="text-sm font-semibold text-emerald-700">High Demand Period</p>
+                <p className="text-sm font-semibold text-emerald-700">
+                  {busiestService ? `${busiestService.name} has the highest live demand` : "No demand yet"}
+                </p>
                 <p className="text-xs text-emerald-700/80 mt-0.5">
-                  Sanitation services trending up
+                  Based on pending, assigned, and in-progress jobs.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-border p-5">
-                <p className="text-3xl font-bold">Rs. 2.4M</p>
+                <p className="text-3xl font-bold">{totalActiveJobs}</p>
                 <p className="text-[10px] tracking-widest font-semibold text-muted-foreground mt-1">
-                  MONTHLY SERVICE REVENUE
+                  OPEN SERVICE REQUESTS
                 </p>
-                <p className="text-sm font-semibold text-emerald-600 mt-3">
-                  Up 12.5% vs Last Month
+                <p className="text-sm font-semibold text-brand mt-3">
+                  {totalWorkers} workers linked to service categories
                 </p>
               </div>
             </div>
@@ -296,7 +396,7 @@ function ServicesPage() {
         <DialogContent className="rounded-2xl">
           <DialogHeader>
             <DialogTitle>Add New Service</DialogTitle>
-            <DialogDescription>Create a service category for the admin portal.</DialogDescription>
+            <DialogDescription>Create a service category and save it to MongoDB.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddService} className="space-y-4">
             <input
@@ -315,28 +415,14 @@ function ServicesPage() {
               placeholder="Category"
               className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:border-brand"
             />
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                value={newService.workers}
-                onChange={(event) =>
-                  setNewService((current) => ({ ...current, workers: event.target.value }))
-                }
-                type="number"
-                min="0"
-                placeholder="Workers"
-                className="h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:border-brand"
-              />
-              <input
-                value={newService.jobs}
-                onChange={(event) =>
-                  setNewService((current) => ({ ...current, jobs: event.target.value }))
-                }
-                type="number"
-                min="0"
-                placeholder="Active jobs"
-                className="h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:border-brand"
-              />
-            </div>
+            <textarea
+              value={newService.description}
+              onChange={(event) =>
+                setNewService((current) => ({ ...current, description: event.target.value }))
+              }
+              placeholder="Description"
+              className="min-h-24 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:border-brand"
+            />
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -347,9 +433,10 @@ function ServicesPage() {
               </button>
               <button
                 type="submit"
-                className="h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-brand-foreground hover:bg-brand-light"
+                disabled={isSaving}
+                className="h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-brand-foreground hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Add Service
+                {isSaving ? "Saving..." : "Add Service"}
               </button>
             </div>
           </form>

@@ -1,9 +1,26 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import { jwtDecode } from "jwt-decode";
+import { apiFetch } from "@/utils/api";
 
 interface User {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   email: string;
+  role: string;
+}
+
+interface JwtPayload {
+  exp?: number;
+  id: string;
   role: string;
 }
 
@@ -11,8 +28,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  expiresAt: number | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -22,7 +39,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -34,87 +51,92 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const isAuthenticated = !!token && !!user;
+  const isAuthenticated = !!token && !!user && !!expiresAt && expiresAt > Date.now();
 
-  useEffect(() => {
-    // Check for existing auth on mount
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setToken(null);
+    setExpiresAt(null);
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("tokenExpiresAt");
   }, []);
 
+  const saveSession = useCallback(
+    (nextToken: string, nextUser: User) => {
+      const decoded = jwtDecode<JwtPayload>(nextToken);
+      const nextExpiresAt = decoded.exp ? decoded.exp * 1000 : Date.now() + 5 * 60 * 1000;
+
+      if (nextUser.role !== "admin" || decoded.role !== "admin" || nextExpiresAt <= Date.now()) {
+        clearSession();
+        throw new Error("Only active admin sessions can access this portal");
+      }
+
+      setToken(nextToken);
+      setUser(nextUser);
+      setExpiresAt(nextExpiresAt);
+      localStorage.setItem("token", nextToken);
+      localStorage.setItem("user", JSON.stringify(nextUser));
+      localStorage.setItem("tokenExpiresAt", String(nextExpiresAt));
+    },
+    [clearSession],
+  );
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+
+    if (storedToken && storedUser) {
+      try {
+        saveSession(storedToken, JSON.parse(storedUser) as User);
+      } catch {
+        clearSession();
+      }
+    }
+    setLoading(false);
+  }, [clearSession, saveSession]);
+
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const timeout = window.setTimeout(
+      () => {
+        clearSession();
+      },
+      Math.max(expiresAt - Date.now(), 0),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [clearSession, expiresAt]);
+
   const login = async (email: string, password: string) => {
-    try {
-      const response = await fetch('https://ustadgo.vercel.app/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+    const response = await apiFetch("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
 
-      if (!response.ok) {
-        throw new Error('Login failed');
-      }
+    const data = await response.json();
 
-      const data = await response.json();
-      
-      setToken(data.token);
-      setUser(data.user);
-      
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-    } catch (error) {
-      throw error;
+    if (!response.ok) {
+      throw new Error(data.msg || data.error || "Login failed");
     }
-  };
 
-  const register = async (name: string, email: string, password: string) => {
-    try {
-      const response = await fetch('https://ustadgo.vercel.app/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Registration failed');
-      }
-
-      const data = await response.json();
-      
-      setToken(data.token);
-      setUser(data.user);
-      
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-    } catch (error) {
-      throw error;
-    }
+    saveSession(data.token, data.user);
   };
 
   const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearSession();
   };
 
   const value: AuthContextType = {
     user,
     token,
     isAuthenticated,
+    expiresAt,
     login,
-    register,
     logout,
     loading,
   };

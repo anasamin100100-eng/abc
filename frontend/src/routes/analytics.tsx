@@ -1,205 +1,197 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  Search,
-  Calendar,
-  SlidersHorizontal,
-  TrendingUp,
-  TrendingDown,
-  MapPin,
-  Star,
-  Clock,
-  Download,
-} from "lucide-react";
+import { Calendar, Download, Search, Star, TrendingUp } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart, Bar, XAxis, ResponsiveContainer, Cell } from "recharts";
+import { Bar, BarChart, Cell, ResponsiveContainer, XAxis } from "recharts";
+import { apiFetch } from "@/utils/api";
 
 export const Route = createFileRoute("/analytics")({
   component: AnalyticsPage,
   head: () => ({
-    meta: [
-      { title: "Analytics — UstadGo Admin" },
-      {
-        name: "description",
-        content:
-          "Analytics deep-dive for UstadGo: real-time performance, revenue, jobs by category, top workers, and city performance.",
-      },
-    ],
+    meta: [{ title: "Analytics - UstadGo Admin" }],
   }),
 });
 
-const stats = [
-  { label: "NEW USERS", value: "1,284", trend: "+12%", up: true },
-  { label: "WORKERS", value: "452", trend: "+5%", up: true },
-  { label: "JOBS POSTED", value: "8,902", trend: "0%", up: null },
-  { label: "COMPLETED", value: "7,431", trend: "+8%", up: true },
-  { label: "REVENUE", value: "Rs. 1.2M", trend: "+24%", up: true },
-  { label: "AVG VALUE", value: "Rs. 2,450", trend: "-2%", up: false },
-];
-
-const revenueBars = [
-  { month: "JAN", v: 40 },
-  { month: "FEB", v: 55 },
-  { month: "MAR", v: 90 },
-  { month: "APR", v: 100 },
-  { month: "MAY", v: 70 },
-  { month: "JUN", v: 45 },
-];
-
-const categories = [
-  { name: "Home Maintenance", value: 2400, pct: 100 },
-  { name: "Cleaning Services", value: 1850, pct: 77 },
-  { name: "Education/Tutoring", value: 1200, pct: 50 },
-  { name: "Beauty & Wellness", value: 980, pct: 41 },
-  { name: "Tech Support", value: 450, pct: 19 },
-];
-
-const topWorkers = [
-  {
-    name: "Zubair Ahmed",
-    city: "Karachi",
-    rating: 4.9,
-    jobs: 124,
-    rev: "Rs. 84,200",
-    initials: "ZA",
-  },
-  { name: "Sana Malik", city: "Lahore", rating: 4.8, jobs: 98, rev: "Rs. 62,150", initials: "SM" },
-  {
-    name: "Irfan Farooq",
-    city: "Islamabad",
-    rating: 5.0,
-    jobs: 76,
-    rev: "Rs. 58,900",
-    initials: "IF",
-  },
-  {
-    name: "Bilal Siddiqui",
-    city: "Karachi",
-    rating: 4.7,
-    jobs: 69,
-    rev: "Rs. 51,300",
-    initials: "BS",
-  },
-  {
-    name: "Faiza Batool",
-    city: "Rawalpindi",
-    rating: 4.6,
-    jobs: 61,
-    rev: "Rs. 43,850",
-    initials: "FB",
-  },
-  {
-    name: "Maham Qureshi",
-    city: "Lahore",
-    rating: 4.8,
-    jobs: 55,
-    rev: "Rs. 39,700",
-    initials: "MQ",
-  },
-];
-
-const cityPerf = [
-  { city: "Karachi", jobs: 3412, eff: 92, growth: "+18.4%", up: true, color: "bg-emerald-500" },
-  { city: "Lahore", jobs: 2890, eff: 88, growth: "+12.2%", up: true, color: "bg-emerald-500" },
-  { city: "Islamabad", jobs: 1205, eff: 95, growth: "+5.7%", up: true, color: "bg-brand" },
-  { city: "Rawalpindi", jobs: 1142, eff: 74, growth: "-2.1%", up: false, color: "bg-amber-500" },
-];
-
-const dateRanges = ["Last 7 Days", "Last 30 Days", "Last 90 Days", "This Year"] as const;
-const cityFilters = ["All Cities", ...cityPerf.map((city) => city.city)] as const;
-const categoryFilters = ["All Categories", ...categories.map((category) => category.name)] as const;
+type User = { _id: string; name?: string; role?: string };
+type Worker = {
+  _id: string;
+  user_id?: string;
+  service_id?: string;
+  rating?: number;
+  total_jobs?: number;
+  reliability_score?: number;
+};
+type Service = { _id: string; name?: string; category_type?: string };
+type Job = { _id: string; service_id?: string; status?: string; location?: string; requested_at?: string };
+type Payment = { worker_id?: string; amount?: number; payment_status?: string; paid_at?: string };
 
 const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN"];
 
 function AnalyticsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [dateRange, setDateRange] = useState<(typeof dateRanges)[number]>("Last 30 Days");
-  const [cityFilter, setCityFilter] = useState<(typeof cityFilters)[number]>("All Cities");
-  const [categoryFilter, setCategoryFilter] =
-    useState<(typeof categoryFilters)[number]>("All Categories");
-  const [showAllWorkers, setShowAllWorkers] = useState(false);
-
+  const [users, setUsers] = useState<User[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const hasActiveFilters =
-    cityFilter !== "All Cities" || categoryFilter !== "All Categories" || Boolean(normalizedSearch);
 
-  const visibleCategories = useMemo(() => {
-    return categories.filter((category) => {
-      const matchesCategory =
-        categoryFilter === "All Categories" || category.name === categoryFilter;
-      const matchesSearch =
-        !normalizedSearch || category.name.toLowerCase().includes(normalizedSearch);
+  useEffect(() => {
+    async function loadAnalytics() {
+      setLoading(true);
+      try {
+        const [usersResponse, workersResponse, servicesResponse, jobsResponse, paymentsResponse] =
+          await Promise.all([
+            apiFetch("/users"),
+            apiFetch("/workers"),
+            apiFetch("/services"),
+            apiFetch("/jobs"),
+            apiFetch("/payments"),
+          ]);
 
-      return matchesCategory && matchesSearch;
-    });
-  }, [categoryFilter, normalizedSearch]);
+        if (
+          !usersResponse.ok ||
+          !workersResponse.ok ||
+          !servicesResponse.ok ||
+          !jobsResponse.ok ||
+          !paymentsResponse.ok
+        ) {
+          throw new Error("Could not load analytics data from backend");
+        }
 
-  const visibleWorkers = useMemo(() => {
-    return topWorkers.filter((worker) => {
-      const matchesCity = cityFilter === "All Cities" || worker.city === cityFilter;
-      const matchesSearch =
+        const [nextUsers, nextWorkers, nextServices, nextJobs, nextPayments] =
+          (await Promise.all([
+            usersResponse.json(),
+            workersResponse.json(),
+            servicesResponse.json(),
+            jobsResponse.json(),
+            paymentsResponse.json(),
+          ])) as [User[], Worker[], Service[], Job[], Payment[]];
+
+        setUsers(nextUsers);
+        setWorkers(nextWorkers);
+        setServices(nextServices);
+        setJobs(nextJobs);
+        setPayments(nextPayments);
+      } catch (error) {
+        toast.error("Analytics could not be loaded", {
+          description: error instanceof Error ? error.message : "Please check backend/login.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAnalytics();
+  }, []);
+
+  const usersById = useMemo(() => new Map(users.map((user) => [user._id, user])), [users]);
+  const servicesById = useMemo(
+    () => new Map(services.map((service) => [service._id, service])),
+    [services],
+  );
+
+  const completedPayments = payments.filter((payment) => payment.payment_status === "completed");
+  const revenue = completedPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+  const completedJobs = jobs.filter((job) => job.status === "completed").length;
+  const avgValue = completedPayments.length ? Math.round(revenue / completedPayments.length) : 0;
+
+  const stats = [
+    { label: "USERS", value: users.length.toLocaleString() },
+    { label: "WORKERS", value: workers.length.toLocaleString() },
+    { label: "JOBS POSTED", value: jobs.length.toLocaleString() },
+    { label: "COMPLETED", value: completedJobs.toLocaleString() },
+    { label: "REVENUE", value: `Rs. ${revenue.toLocaleString()}` },
+    { label: "AVG VALUE", value: `Rs. ${avgValue.toLocaleString()}` },
+  ];
+
+  const revenueBars = months.map((month, index) => ({
+    month,
+    v: completedPayments
+      .filter((payment) => payment.paid_at && new Date(payment.paid_at).getMonth() === index)
+      .reduce((sum, payment) => sum + (payment.amount || 0), 0),
+  }));
+
+  const categoryData = services.map((service) => {
+    const count = jobs.filter((job) => job.service_id === service._id).length;
+    return {
+      name: service.name || "General Service",
+      value: count,
+    };
+  });
+  const maxCategory = Math.max(1, ...categoryData.map((category) => category.value));
+  const visibleCategories = categoryData
+    .filter((category) => !normalizedSearch || category.name.toLowerCase().includes(normalizedSearch))
+    .map((category) => ({
+      ...category,
+      pct: Math.round((category.value / maxCategory) * 100),
+    }));
+
+  const topWorkers = workers
+    .map((worker) => {
+      const user = worker.user_id ? usersById.get(worker.user_id) : undefined;
+      const workerRevenue = completedPayments
+        .filter((payment) => payment.worker_id === worker.user_id)
+        .reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
+      return {
+        name: user?.name || "Unknown Worker",
+        initials: initials(user?.name || "Worker"),
+        rating: worker.rating || 0,
+        jobs: worker.total_jobs || 0,
+        reliability: Math.round(worker.reliability_score || 0),
+        service: worker.service_id ? servicesById.get(worker.service_id)?.name || "Service" : "Service",
+        revenue: workerRevenue,
+      };
+    })
+    .filter(
+      (worker) =>
         !normalizedSearch ||
-        [worker.name, worker.city, worker.initials].some((value) =>
-          value.toLowerCase().includes(normalizedSearch),
-        );
+        [worker.name, worker.service].some((value) => value.toLowerCase().includes(normalizedSearch)),
+    )
+    .sort((a, b) => b.reliability - a.reliability);
 
-      return matchesCity && matchesSearch;
-    });
-  }, [cityFilter, normalizedSearch]);
-
-  const visibleCities = useMemo(() => {
-    return cityPerf.filter((city) => {
-      const matchesCity = cityFilter === "All Cities" || city.city === cityFilter;
-      const matchesSearch = !normalizedSearch || city.city.toLowerCase().includes(normalizedSearch);
-
-      return matchesCity && matchesSearch;
-    });
-  }, [cityFilter, normalizedSearch]);
-
-  const workersToShow = showAllWorkers ? visibleWorkers : visibleWorkers.slice(0, 3);
-  const resultCount = visibleCategories.length + visibleWorkers.length + visibleCities.length;
+  const cityData = Array.from(
+    jobs.reduce((map, job) => {
+      const city = extractCity(job.location);
+      map.set(city, (map.get(city) || 0) + 1);
+      return map;
+    }, new Map<string, number>()),
+  ).map(([city, count]) => ({ city, jobs: count }));
 
   const handleExportReports = () => {
     const rows = [
-      ["Report", "Analytics"],
-      ["Date Range", dateRange],
-      ["City Filter", cityFilter],
-      ["Category Filter", categoryFilter],
+      ["Metric", "Value"],
+      ...stats.map((stat) => [stat.label, stat.value]),
       [],
-      ["Metric", "Value", "Trend"],
-      ...stats.map((stat) => [stat.label, stat.value, stat.trend]),
+      ["Category", "Jobs"],
+      ...visibleCategories.map((category) => [category.name, category.value]),
       [],
-      ["Category", "Jobs", "Share"],
-      ...visibleCategories.map((category) => [category.name, category.value, `${category.pct}%`]),
-      [],
-      ["Worker", "City", "Rating", "Jobs", "Revenue"],
-      ...visibleWorkers.map((worker) => [
+      ["Worker", "Service", "Rating", "Jobs", "Reliability", "Revenue"],
+      ...topWorkers.map((worker) => [
         worker.name,
-        worker.city,
+        worker.service,
         worker.rating,
         worker.jobs,
-        worker.rev,
+        `${worker.reliability}%`,
+        `Rs. ${worker.revenue.toLocaleString()}`,
       ]),
-      [],
-      ["City", "Active Jobs", "Efficiency", "Growth"],
-      ...visibleCities.map((city) => [city.city, city.jobs, `${city.eff}%`, city.growth]),
     ];
     const csv = rows.map((row) => row.map((cell) => csvEscape(String(cell))).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `ustadgo-analytics-${dateRange.toLowerCase().replaceAll(" ", "-")}.csv`;
+    link.download = "ustadgo-analytics.csv";
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    toast.success("Analytics report downloaded", {
-      description: "The CSV includes the active search, date range, and filters.",
-    });
+    toast.success("Analytics report downloaded");
   };
 
   return (
@@ -224,130 +216,35 @@ function AnalyticsPage() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Analytics Deep-Dive</h1>
               <p className="text-muted-foreground mt-1">
-                Real-time performance overview across Pakistan
+                Real-time performance from users, workers, jobs, services, and payments.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold">
-                    <Calendar className="size-4" />
-                    {dateRange}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-52 rounded-xl p-2">
-                  {dateRanges.map((range) => (
-                    <button
-                      key={range}
-                      type="button"
-                      onClick={() => setDateRange(range)}
-                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${
-                        dateRange === range
-                          ? "bg-brand text-brand-foreground"
-                          : "text-foreground/80 hover:bg-surface-muted"
-                      }`}
-                    >
-                      {range}
-                    </button>
-                  ))}
-                </PopoverContent>
-              </Popover>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand text-brand-foreground text-sm font-semibold">
-                    <SlidersHorizontal className="size-4" />
-                    Filters
-                    {hasActiveFilters && (
-                      <span className="size-2 rounded-full bg-brand-foreground" />
-                    )}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-80 rounded-xl">
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-xs font-bold tracking-widest text-muted-foreground">
-                        CITY
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {cityFilters.map((city) => (
-                          <button
-                            key={city}
-                            type="button"
-                            onClick={() => setCityFilter(city)}
-                            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
-                              cityFilter === city
-                                ? "border-brand bg-brand text-brand-foreground"
-                                : "border-border hover:bg-surface-muted"
-                            }`}
-                          >
-                            {city}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold tracking-widest text-muted-foreground">
-                        CATEGORY
-                      </p>
-                      <div className="mt-2 grid grid-cols-1 gap-2">
-                        {categoryFilters.map((category) => (
-                          <button
-                            key={category}
-                            type="button"
-                            onClick={() => setCategoryFilter(category)}
-                            className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ${
-                              categoryFilter === category
-                                ? "border-brand bg-brand text-brand-foreground"
-                                : "border-border hover:bg-surface-muted"
-                            }`}
-                          >
-                            {category}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCityFilter("All Cities");
-                        setCategoryFilter("All Categories");
-                        setSearchTerm("");
-                      }}
-                      className="w-full rounded-lg border border-border py-2 text-sm font-semibold hover:bg-surface-muted"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
+            <button
+              type="button"
+              onClick={handleExportReports}
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-brand to-brand-light text-brand-foreground text-sm font-semibold shadow-lg"
+            >
+              <Download className="size-4" /> Export Reports
+            </button>
           </div>
-          {(searchTerm || hasActiveFilters) && (
-            <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground">
-              Showing {resultCount} analytics result{resultCount === 1 ? "" : "s"} for {dateRange}.
+
+          {loading && (
+            <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Loading analytics from backend...
             </div>
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {stats.map((s) => (
-              <div key={s.label} className="bg-background rounded-2xl p-5 border border-border">
+            {stats.map((stat) => (
+              <div key={stat.label} className="bg-background rounded-2xl p-5 border border-border">
                 <p className="text-[10px] tracking-widest font-semibold text-muted-foreground">
-                  {s.label}
+                  {stat.label}
                 </p>
                 <div className="mt-3 flex items-end justify-between gap-2">
-                  <p className="text-2xl font-bold leading-none">{s.value}</p>
-                  <span
-                    className={`inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded ${
-                      s.up === true
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : s.up === false
-                          ? "bg-red-500/10 text-red-600"
-                          : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {s.up === true && <TrendingUp className="size-3" />}
-                    {s.up === false && <TrendingDown className="size-3" />}
-                    {s.trend}
+                  <p className="text-2xl font-bold leading-none">{stat.value}</p>
+                  <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600">
+                    <TrendingUp className="size-3" />
+                    Live
                   </span>
                 </div>
               </div>
@@ -359,16 +256,11 @@ function AnalyticsPage() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <h3 className="text-lg font-bold">Revenue Over Time</h3>
-                  <p className="text-sm text-muted-foreground">Projected vs Actual Revenue (PKR)</p>
+                  <p className="text-sm text-muted-foreground">Completed payment revenue by month</p>
                 </div>
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-2.5 rounded-full bg-brand" /> Actual
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-2.5 rounded-full bg-brand-light" /> Projected
-                  </span>
-                </div>
+                <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <Calendar className="size-4" /> This Year
+                </span>
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -380,16 +272,10 @@ function AnalyticsPage() {
                       tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                     />
                     <Bar dataKey="v" radius={[12, 12, 12, 12]}>
-                      {revenueBars.map((b, i) => (
+                      {revenueBars.map((bar, index) => (
                         <Cell
-                          key={i}
-                          fill={
-                            b.v > 80
-                              ? "hsl(var(--brand))"
-                              : b.v > 50
-                                ? "hsl(var(--brand) / 0.7)"
-                                : "hsl(var(--brand) / 0.35)"
-                          }
+                          key={bar.month}
+                          fill={index % 2 === 0 ? "hsl(var(--brand))" : "hsl(var(--brand) / 0.6)"}
                         />
                       ))}
                     </Bar>
@@ -399,133 +285,101 @@ function AnalyticsPage() {
             </div>
 
             <div className="bg-background rounded-2xl p-6 border border-border">
-              <h3 className="text-lg font-bold">Jobs by Category</h3>
-              <p className="text-sm text-muted-foreground">Most requested service sectors</p>
+              <h3 className="text-lg font-bold">Jobs by Service</h3>
+              <p className="text-sm text-muted-foreground">Most requested service categories</p>
               <div className="mt-6 space-y-5">
-                {visibleCategories.map((c) => (
-                  <div key={c.name}>
+                {visibleCategories.map((category) => (
+                  <div key={category.name}>
                     <div className="flex justify-between text-sm mb-1.5">
-                      <span className="font-medium">{c.name}</span>
-                      <span className="font-semibold">{c.value.toLocaleString()}</span>
+                      <span className="font-medium">{category.name}</span>
+                      <span className="font-semibold">{category.value}</span>
                     </div>
                     <div className="h-2 bg-surface-muted rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-brand to-brand-light"
-                        style={{ width: `${c.pct}%` }}
+                        style={{ width: `${category.pct}%` }}
                       />
                     </div>
                   </div>
                 ))}
-                {visibleCategories.length === 0 && (
-                  <p className="rounded-xl bg-surface-muted p-4 text-sm text-muted-foreground">
-                    No categories match the current search or filter.
-                  </p>
-                )}
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-background rounded-2xl p-6 border border-border">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold">Top Performing Workers</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAllWorkers((current) => !current)}
-                  className="text-sm font-semibold text-brand"
-                >
-                  {showAllWorkers ? "Show Less" : "View All"}
-                </button>
-              </div>
+              <h3 className="text-lg font-bold mb-5">Top Performing Workers</h3>
               <div className="grid grid-cols-12 text-[10px] tracking-widest font-semibold text-muted-foreground pb-3 border-b border-border">
                 <div className="col-span-5">WORKER</div>
                 <div className="col-span-2">RATING</div>
                 <div className="col-span-2">JOBS</div>
                 <div className="col-span-3 text-right">REVENUE</div>
               </div>
-              {workersToShow.map((w) => (
+              {topWorkers.slice(0, 6).map((worker) => (
                 <div
-                  key={w.name}
+                  key={worker.name}
                   className="grid grid-cols-12 items-center py-4 border-b border-border last:border-0 text-sm"
                 >
                   <div className="col-span-5 flex items-center gap-3">
                     <div className="size-10 rounded-full bg-gradient-to-br from-brand to-brand-light flex items-center justify-center text-brand-foreground text-xs font-bold">
-                      {w.initials}
+                      {worker.initials}
                     </div>
                     <div>
-                      <p className="font-semibold">{w.name}</p>
-                      <p className="text-xs text-muted-foreground">{w.city}</p>
+                      <p className="font-semibold">{worker.name}</p>
+                      <p className="text-xs text-muted-foreground">{worker.service}</p>
                     </div>
                   </div>
                   <div className="col-span-2 flex items-center gap-1">
                     <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                    <span className="font-semibold">{w.rating}</span>
+                    <span className="font-semibold">{worker.rating.toFixed(1)}</span>
                   </div>
-                  <div className="col-span-2 font-semibold">{w.jobs}</div>
-                  <div className="col-span-3 text-right font-bold">{w.rev}</div>
+                  <div className="col-span-2 font-semibold">{worker.jobs}</div>
+                  <div className="col-span-3 text-right font-bold">
+                    Rs. {worker.revenue.toLocaleString()}
+                  </div>
                 </div>
               ))}
-              {workersToShow.length === 0 && (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No workers match the current search or city filter.
-                </p>
-              )}
             </div>
 
             <div className="bg-background rounded-2xl p-6 border border-border">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold">City Performance</h3>
-                <span className="flex items-center gap-1.5 text-[10px] tracking-widest font-semibold text-muted-foreground">
-                  <Clock className="size-3" /> LAST SYNC: 2:00 PM PKT
-                </span>
-              </div>
+              <h3 className="text-lg font-bold mb-5">City Performance</h3>
               <div className="grid grid-cols-12 text-[10px] tracking-widest font-semibold text-muted-foreground pb-3 border-b border-border">
-                <div className="col-span-3">LOCATION</div>
-                <div className="col-span-3">ACTIVE JOBS</div>
-                <div className="col-span-3">EFFICIENCY</div>
-                <div className="col-span-3 text-right">GROWTH</div>
+                <div className="col-span-6">LOCATION</div>
+                <div className="col-span-3">JOBS</div>
+                <div className="col-span-3 text-right">SHARE</div>
               </div>
-              {visibleCities.map((c) => (
-                <div
-                  key={c.city}
-                  className="grid grid-cols-12 items-center py-4 border-b border-border last:border-0 text-sm"
-                >
-                  <div className="col-span-3 flex items-center gap-2 font-semibold">
-                    <MapPin className="size-4 text-brand" /> {c.city}
-                  </div>
-                  <div className="col-span-3 font-semibold">{c.jobs.toLocaleString()}</div>
-                  <div className="col-span-3 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-surface-muted rounded-full overflow-hidden">
-                      <div className={`h-full ${c.color}`} style={{ width: `${c.eff}%` }} />
-                    </div>
-                    <span className="text-xs font-semibold">{c.eff}%</span>
-                  </div>
+              {cityData.map((city) => {
+                const pct = Math.round((city.jobs / Math.max(1, jobs.length)) * 100);
+                return (
                   <div
-                    className={`col-span-3 text-right font-bold ${c.up ? "text-emerald-600" : "text-red-600"}`}
+                    key={city.city}
+                    className="grid grid-cols-12 items-center py-4 border-b border-border last:border-0 text-sm"
                   >
-                    {c.growth}
+                    <div className="col-span-6 font-semibold">{city.city}</div>
+                    <div className="col-span-3 font-semibold">{city.jobs}</div>
+                    <div className="col-span-3 text-right font-bold text-brand">{pct}%</div>
                   </div>
-                </div>
-              ))}
-              {visibleCities.length === 0 && (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No cities match the current search or filter.
-                </p>
-              )}
+                );
+              })}
             </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleExportReports}
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-brand to-brand-light text-brand-foreground text-sm font-semibold shadow-lg"
-            >
-              <Download className="size-4" /> Export Reports
-            </button>
           </div>
         </main>
       </div>
     </div>
   );
+}
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function extractCity(location?: string) {
+  if (!location) return "Unknown";
+  const parts = location.split(",").map((part) => part.trim());
+  return parts[parts.length - 1] || location;
 }

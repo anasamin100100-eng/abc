@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
+  id: { type: Number, unique: true, sparse: true },
   name: String,
   email: { type: String, unique: true },
   phone: String,
@@ -11,6 +12,10 @@ const userSchema = new mongoose.Schema({
     enum: ["admin", "worker", "client"],
     default: "client",
   },
-}, { timestamps: true });
+  created_at: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.model("User", userSchema, "users");

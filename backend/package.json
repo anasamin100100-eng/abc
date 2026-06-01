@@ -2,8 +2,12 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
+    "create-admin": "node scripts/create-admin.js",
+    "create-collections": "node scripts/create-collections.js",
+    "seed": "node scripts/seed-real-data.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -16,7 +20,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.6.0",
+    "mongoose": "^9.6.2",
     "socket.io": "^4.8.3"
   }
 }
